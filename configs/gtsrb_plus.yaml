@@ -1,0 +1,25 @@
+# Dataset Parameters
+dataset: "GTSRB+"
+data_path: "./data/"
+use_flips: true  # '+' means we use flips -> p4m group
+
+# Model Parameters
+model: "Partial_GCNN"
+group: "P4M" # Rotations + Flips -> P4M group
+in_channels: 3
+num_classes: 43
+resnet_n: 7
+widths: [11, 23, 45] # Wider widths for larger datasets
+ablation: "none" # "none", "no_gate", "full_equiv"
+
+# Training Parameters
+optimizer: "Adam"
+learning_rate: 0.001
+epochs: 100
+batch_size: 128
+scheduler: "StepLR"
+scheduler_step_size: 30
+scheduler_gamma: 0.1
+
+# Logging Parameters
+results_dir: "./results/"
