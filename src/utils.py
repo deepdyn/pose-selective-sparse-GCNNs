@@ -31,15 +31,23 @@ def save_results(results: dict, save_path: str):
         json.dump(results, f, indent=4)
     logging.info(f"Final results saved to {file_path}")
 
-def get_alpha_weights(model: torch.nn.Module):
-    """Extracts and formats all alpha_logits from OrientationGate modules."""
-    alpha_weights = {}
+def get_gate_weights(model: torch.nn.Module) -> dict:
+    """
+    Extracts and formats the current gate values (π_g) from 
+    DifferentiableMaskGate modules.
+    """
+    from src.models.partial_gcnn import DifferentiableMaskGate # Local import to avoid circular dependency
+    
+    gate_weights = {}
     for name, module in model.named_modules():
-        if isinstance(module, torch.nn.Parameter):
-             if 'alpha_logits' in name:
-                  weights = torch.sigmoid(module.data).cpu().numpy()
-                  alpha_weights[name] = [round(w, 4) for w in weights]
-    return alpha_weights
+        if isinstance(module, DifferentiableMaskGate):
+            # Get the deterministic mask value for logging
+            with torch.no_grad():
+                module.eval() # Use deterministic forward pass
+                weights = module.get_mask().cpu().numpy()
+                module.train() # Set back to train mode
+            gate_weights[name] = [round(w, 4) for w in weights]
+    return gate_weights
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
