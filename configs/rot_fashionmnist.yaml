@@ -1,17 +1,16 @@
 # Dataset Parameters
 dataset: "Rot-FashionMNIST"
 data_path: "./data/"
-use_flips: false  # '+' means we use flips -> p4m group
+use_flips: false
 use_rotations: true
 
 # Model Parameters
-model: "Partial_GCNN"
-group: "P4M" # Rotations + Flips -> P4M group
+model: "PoseSelectiveSparse_ResNet44"
+group: "P4" 
 in_channels: 1
 num_classes: 10
 resnet_n: 7 
 widths: [6, 13, 24] # Narrower widths for smaller datasets
-ablation: "none" # "none", "no_gate", "full_equiv"
 
 # Training Parameters
 optimizer: "Adam"
@@ -19,8 +18,19 @@ learning_rate: 0.001
 epochs: 100
 batch_size: 128
 scheduler: "StepLR"
-scheduler_step_size: 30
+scheduler_step_size: 40
 scheduler_gamma: 0.1
+
+# Sparsity and Temperature Schedules
+sparsity_schedule:
+  lambda_initial: 0.0
+  lambda_final: 0.0001
+  anneal_epochs: 60
+
+temperature_schedule:
+  temp_initial: 1.0
+  temp_final: 0.1
+  anneal_epochs: 60
 
 # Logging Parameters
 results_dir: "./results/"
