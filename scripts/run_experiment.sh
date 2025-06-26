@@ -1,18 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=gcnn_exp      # Job name
-#SBATCH --output=logs/%x_%j.out  # Standard output and error log (%x=job name, %j=job id)
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:1             # Request 1 GPU on Paramganga
-#SBATCH --time=08:00:00          # Time limit hrs:min:sec
-#SBATCH --mem=32G
+
+#SBATCH --job-name=gcnn_exp
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
 
 # --- Environment Setup ---
 # Load the necessary modules provided by IITR HPC
 # module load anaconda/3
 # Activate conda environment
-# source activate your_pytorch_env 
+source /scratch/pradeep.cs.iitr/venv-kanishk/bin/activate
+
+# --- Set Python Path ---
+export PYTHONPATH=$PWD:$PYTHONPATH
 
 # --- Argument Parsing ---
 CONFIG_FILE=$1

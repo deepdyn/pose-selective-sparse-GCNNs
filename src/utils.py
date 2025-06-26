@@ -3,6 +3,7 @@ import json
 import torch
 import random
 import numpy as np
+import torch.nn.functional as F
 
 def set_seed(seed: int):
     """Sets the random seed for reproducibility across all libraries."""
