@@ -12,8 +12,11 @@ import torch.nn.functional as F
 # Import the new sparse model and the specific gate for type checking
 from src.models.pose_gcnn import PoseSelectiveSparse_ResNet44, DifferentiableMaskGate
 from src.data_loader import get_dataloaders_with_fixed_splits
-# Corrected import from calculate_ece to compute_ece
-from src.utils import set_seed, setup_logging, save_results, get_gate_weights, count_parameters, compute_ece
+# Updated utils import to include FLOPs calculation
+from src.utils import (
+    set_seed, setup_logging, save_results, get_gate_weights, 
+    count_parameters, compute_ece, calculate_gflops
+)
 
 def train_epoch(model, dataloader, optimizer, criterion, device, lambda_penalty):
     model.train()
@@ -58,40 +61,20 @@ def train_epoch(model, dataloader, optimizer, criterion, device, lambda_penalty)
     return epoch_loss, epoch_acc
 
 def evaluate(model, dataloader, criterion, device, description="Evaluating"):
-    """
-    Evaluates the model on a given dataset.
-
-    Args:
-        model (nn.Module): The neural network model to evaluate.
-        dataloader (DataLoader): The DataLoader for the evaluation data.
-        criterion (nn.Module): The loss function.
-        device (torch.device): The device to run the evaluation on (e.g., 'cuda' or 'cpu').
-        description (str): A description for the progress bar (e.g., "Validating" or "Testing").
-
-    Returns:
-        tuple: A tuple containing:
-            - epoch_loss (float): The average loss over the dataset.
-            - epoch_acc (float): The accuracy over the dataset.
-            - ece (float): The Expected Calibration Error.
-            - all_preds (torch.Tensor): All predictions made by the model.
-            - all_labels (torch.Tensor): All true labels from the dataset.
-    """
-    model.eval()  # Set the model to evaluation mode
+    model.eval()
     running_loss = 0.0
     correct_predictions = 0
     total_samples = 0
     all_preds = []
     all_labels = []
 
-    with torch.no_grad():  # Disable gradient calculations
+    with torch.no_grad():
         for inputs, labels in tqdm(dataloader, desc=description):
             inputs, labels = inputs.to(device), labels.to(device)
 
-            # Forward pass
             outputs = model(inputs)
             loss = criterion(outputs, labels)
 
-            # Update metrics
             running_loss += loss.item() * inputs.size(0)
             _, predicted = torch.max(outputs.data, 1)
             total_samples += labels.size(0)
@@ -100,11 +83,9 @@ def evaluate(model, dataloader, criterion, device, description="Evaluating"):
             all_preds.append(predicted.cpu())
             all_labels.append(labels.cpu())
 
-    # Calculate final metrics
     epoch_loss = running_loss / total_samples
     epoch_acc = (correct_predictions / total_samples) * 100
     
-    # Calculate Expected Calibration Error (ECE)
     ece = compute_ece(model, dataloader, device)
     
     all_preds = torch.cat(all_preds)
@@ -112,12 +93,10 @@ def evaluate(model, dataloader, criterion, device, description="Evaluating"):
 
     return epoch_loss, epoch_acc, ece, all_preds, all_labels
 
-
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
-    # Updated save path to include ablation info
     save_path = os.path.join(config['results_dir'], config['dataset'], config['model'], f"seed_{args.seed}")
     os.makedirs(save_path, exist_ok=True)
     setup_logging(os.path.join(save_path, 'train.log'))
@@ -134,9 +113,18 @@ def main(args):
         path=config['data_path']
     )
     
-    # Import the new Sparse Model
+    # Define input_shape based on dataset for FLOPs calculation
+    if 'MNIST' in config['dataset'] or 'FashionMNIST' in config['dataset']:
+        input_shape = (config['in_channels'], 28, 28)
+    elif 'CIFAR' in config['dataset'] or 'GTSRB' in config['dataset']:
+        input_shape = (config['in_channels'], 32, 32)
+    else:
+        # Fallback for any other dataset
+        input_shape = (config.get('in_channels', 3), 32, 32)
+        logging.warning(f"Could not derive input shape for {config['dataset']}. Defaulting to {input_shape}.")
+
     model = PoseSelectiveSparse_ResNet44(
-        n=config.get('resnet_n', 7), # Use .get for safer access
+        n=config.get('resnet_n', 7),
         num_classes=config['num_classes'],
         in_channels=config['in_channels'],
         group=config['group'],
@@ -153,26 +141,16 @@ def main(args):
     best_val_acc = 0.0
     best_model_path = os.path.join(save_path, 'model_best.pth')
     
-    # Get sparsity and temperature schedules from config, if they exist
     sparsity_schedule = config.get('sparsity_schedule', {'lambda_initial': 0.0, 'lambda_final': 0.0, 'anneal_epochs': 1})
     temp_schedule = config.get('temperature_schedule', {'temp_initial': 1.0, 'temp_final': 1.0, 'anneal_epochs': 1})
 
-
-    # --- Training & Validation Loop with Annealing ---
     for epoch in range(config['epochs']):
-        # --- ANNEALING LOGIC ---
         progress = min(epoch / temp_schedule['anneal_epochs'], 1.0) if temp_schedule['anneal_epochs'] > 0 else 1.0
         
-        # Update temperature
         current_temp = temp_schedule['temp_initial'] - (temp_schedule['temp_initial'] - temp_schedule['temp_final']) * progress
-        
-        # Update lambda
         current_lambda = sparsity_schedule['lambda_initial'] + (sparsity_schedule['lambda_final'] - sparsity_schedule['lambda_initial']) * progress
-        
-        # Determine if noise should be used
         use_noise_flag = progress < 1.0
 
-        # Apply the new temperature and noise flag to all gates
         for module in model.modules():
             if isinstance(module, DifferentiableMaskGate):
                 module.temp.fill_(current_temp)
@@ -180,7 +158,6 @@ def main(args):
 
         logging.info(f"Epoch {epoch+1}/{config['epochs']} | Temp: {current_temp:.4f} | Lambda: {current_lambda:.6f} | Noise: {use_noise_flag}")
 
-        # --- TRAIN AND VALIDATE ---
         start_time = time.time()
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device, current_lambda)
         val_loss, val_acc, val_ece, _, _ = evaluate(model, val_loader, criterion, device, "Validating")
@@ -193,13 +170,18 @@ def main(args):
             torch.save(model.state_dict(), best_model_path)
             logging.info(f"  -> New best model saved with validation accuracy: {best_val_acc:.2f}%")
         
-        # Log gate weights
         gate_weights = get_gate_weights(model)
         logging.info(f"  -> Gate Weights: {gate_weights}")
 
     # --- FINAL TESTING ---
     logging.info("Training finished. Evaluating best model on the test set.")
     model.load_state_dict(torch.load(best_model_path))
+    
+    # --- FLOPs Calculation ---
+    logging.info("Calculating final model GFLOPs...")
+    gflops = calculate_gflops(model, input_shape, device)
+    if gflops != -1:
+        logging.info(f"Final Pruned Model GFLOPs: {gflops:.4f}G")
     
     test_loss, test_acc, test_ece, _, _ = evaluate(model, test_loader, criterion, device, "Testing")
     logging.info(f"Final Test Results | Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%, Test ECE: {test_ece:.4f}")
@@ -208,7 +190,8 @@ def main(args):
         'best_validation_accuracy': best_val_acc,
         'test_accuracy': test_acc,
         'test_ece': test_ece,
-        'model_params': num_params
+        'model_params': num_params,
+        'gflops': gflops
     }
     save_results(final_results, save_path)
 
@@ -218,3 +201,4 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, required=True, help="Random seed for the experiment.")
     args = parser.parse_args()
     main(args)
+
