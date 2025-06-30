@@ -4,6 +4,7 @@ import torch
 import random
 import numpy as np
 import torch.nn.functional as F
+from functools import partial
 
 def set_seed(seed: int):
     """Sets the random seed for reproducibility across all libraries."""
@@ -37,7 +38,7 @@ def get_gate_weights(model: torch.nn.Module) -> dict:
     Extracts and formats the current gate values (π_g) from 
     DifferentiableMaskGate modules.
     """
-    from src.models.partial_gcnn import DifferentiableMaskGate # Local import to avoid circular dependency
+    from src.models.pose_gcnn import DifferentiableMaskGate # Local import to avoid circular dependency
     
     gate_weights = {}
     for name, module in model.named_modules():
@@ -83,3 +84,48 @@ def compute_ece(model, test_loader, device="cuda", n_bins=15):
     return expected_calibration_error(conf_tensor,
                                       correct_tensor,
                                       n_bins=n_bins)
+
+
+def calculate_gflops(model, input_shape, device):
+    """
+    Calculates the GFLOPs of a sparse model by temporarily hardening the gates
+    to reflect the pruned state at test time.
+    """
+    try:
+        from thop import profile
+        from src.models.pose_gcnn import DifferentiableMaskGate
+    except ImportError:
+        logging.warning("`thop` is not installed. Skipping FLOPs calculation. Please run `pip install thop`.")
+        return -1
+
+    dummy_input = torch.randn(1, *input_shape).to(device)
+    
+    original_get_mask_methods = {}
+
+    # Define the hard mask function that mimics the zero-temperature limit
+    def hard_get_mask(self):
+        with torch.no_grad():
+            soft_mask = torch.sigmoid(self.b_logits / self.temp)
+            # Convert to a hard 0/1 mask
+            return (soft_mask > 0.5).float()
+
+    # Temporarily replace the get_mask method in all gate modules
+    for name, module in model.named_modules():
+        if isinstance(module, DifferentiableMaskGate):
+            original_get_mask_methods[name] = module.get_mask
+            module.get_mask = partial(hard_get_mask, module)
+
+    try:
+        model.eval()
+        total_ops, _ = profile(model, inputs=(dummy_input,), verbose=False)
+        gflops = total_ops / 1e9
+    except Exception as e:
+        logging.error(f"An error occurred during FLOPs calculation: {e}")
+        gflops = -1
+    finally:
+        # IMPORTANT: Restore the original methods to not affect subsequent evaluations
+        for name, module in model.named_modules():
+            if name in original_get_mask_methods:
+                module.get_mask = original_get_mask_methods[name]
+    
+    return gflops
