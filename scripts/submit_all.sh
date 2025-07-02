@@ -7,7 +7,7 @@
 # --- Configuration ---
 # Maximum number of jobs to have in the queue at one time.
 # From the user manual (p. 53), the GPU partition allows 3 running jobs.
-MAX_JOBS=4
+MAX_JOBS=3
 # Log file to keep track of jobs that have already been submitted.
 SUBMITTED_JOBS_LOG="submitted_jobs.log"
 

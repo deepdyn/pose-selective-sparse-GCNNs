@@ -14,7 +14,7 @@ widths: [11, 23, 45] # Wider widths for larger datasets
 # Training Parameters
 optimizer: "Adam"
 learning_rate: 0.001
-epochs: 100
+epochs: 200
 batch_size: 128
 scheduler: "StepLR"
 scheduler_step_size: 40
