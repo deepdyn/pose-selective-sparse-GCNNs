@@ -26,3 +26,15 @@ gcnn_cifar10_seed_4
 gcnn_cifar10_plus_seed_0
 gcnn_cifar10_plus_seed_1
 gcnn_cifar10_plus_seed_2
+gcnn_cifar10_plus_seed_3
+gcnn_cifar10_plus_seed_4
+gcnn_gtsrb_seed_0
+gcnn_gtsrb_seed_1
+gcnn_gtsrb_seed_2
+gcnn_gtsrb_seed_3
+gcnn_gtsrb_seed_4
+gcnn_gtsrb_plus_seed_0
+gcnn_gtsrb_plus_seed_1
+gcnn_gtsrb_plus_seed_2
+gcnn_gtsrb_plus_seed_3
+gcnn_gtsrb_plus_seed_4

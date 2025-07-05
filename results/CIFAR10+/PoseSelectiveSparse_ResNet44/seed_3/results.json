@@ -1,0 +1,7 @@
+{
+    "best_validation_accuracy": 94.0,
+    "test_accuracy": 93.82000000000001,
+    "test_ece": 0.045521438121795654,
+    "model_params": 1750388,
+    "gflops": 0.009338159
+}
