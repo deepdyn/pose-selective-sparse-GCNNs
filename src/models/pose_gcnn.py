@@ -30,7 +30,7 @@ class DifferentiableMaskGate(nn.Module):
         """
         # During training with noise, use the Gumbel-Softmax trick 
         if self.training and self.use_noise:
-            # Sample Gumbel noise and add it to the logits
+            # Gumbel noise and add it to the logits
             gumbel_noise = -torch.log(-torch.log(torch.rand_like(self.b_logits)))
             y = (self.b_logits + gumbel_noise) / self.temp
         else:
