@@ -22,6 +22,7 @@ DATASETS=(
     "gtsrb"
     "gtsrb_plus"
 )
+
 SEEDS=(0 1 2 3 4)
 
 # Create the log file if it doesn't exist
