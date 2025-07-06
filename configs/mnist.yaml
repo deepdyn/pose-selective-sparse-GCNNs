@@ -4,12 +4,12 @@ data_path: "./data/"
 use_flips: false 
 
 # Model Parameters
-model: "PoseSelectiveSparse_ResNet44"
+# --- Use the new model name ---
+model: "PoseSelective_P4CNN_MNIST"
 group: "P4" 
 in_channels: 1
 num_classes: 10
-resnet_n: 7 
-widths: [6, 13, 24] # Narrower widths for smaller datasets
+# resnet_n and widths are no longer needed for this model
 
 # Training Parameters
 optimizer: "Adam"

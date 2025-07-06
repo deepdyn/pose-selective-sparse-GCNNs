@@ -4,13 +4,12 @@ data_path: "./data/"
 use_flips: false 
 
 # Model Parameters
-model: "PoseSelectiveSparse_ResNet44" # <-- IMPORTANT: Use the new model name
+# --- Use the new model name ---
+model: "PoseSelective_P4CNN_MNIST"
 group: "P4" 
 in_channels: 1
 num_classes: 10
-resnet_n: 7 
-widths: [6, 13, 24]
-ablation: "none"
+# resnet_n and widths are no longer needed for this model
 
 # Training Parameters
 optimizer: "Adam"
@@ -18,19 +17,19 @@ learning_rate: 0.001
 epochs: 100
 batch_size: 128
 scheduler: "StepLR"
-scheduler_step_size: 40 # Adjusted scheduler to interfere less with annealing
+scheduler_step_size: 40
 scheduler_gamma: 0.1
 
-# Sparsity and Temperature Schedules (NEW)
+# Sparsity and Temperature Schedules
 sparsity_schedule:
   lambda_initial: 0.0
-  lambda_final: 0.0001 # A common starting point, vary as per paper's sweep
-  anneal_epochs: 60   # Anneal over the first 60% of epochs
+  lambda_final: 0.0001
+  anneal_epochs: 60
 
 temperature_schedule:
   temp_initial: 1.0
   temp_final: 0.1
-  anneal_epochs: 60   # Anneal over the first 60% of epochs
+  anneal_epochs: 60
 
 # Logging Parameters
 results_dir: "./results/"

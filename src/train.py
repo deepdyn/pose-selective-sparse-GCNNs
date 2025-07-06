@@ -9,15 +9,16 @@ from tqdm import tqdm
 import numpy as np
 import torch.nn.functional as F
 
-# Import the new sparse model and the specific gate for type checking
+# Import the models and the specific gate for type checking
 from src.models.pose_gcnn import PoseSelectiveSparse_ResNet44, DifferentiableMaskGate
+from src.models.mnist_architectures import PoseSelective_P4CNN_MNIST # <-- ADD THIS IMPORT
 from src.data_loader import get_dataloaders_with_fixed_splits
-# Updated utils import to include FLOPs calculation
 from src.utils import (
     set_seed, setup_logging, save_results, get_gate_weights, 
     count_parameters, compute_ece, calculate_gflops
 )
 
+# ... (train_epoch and evaluate functions remain unchanged) ...
 def train_epoch(model, dataloader, optimizer, criterion, device, lambda_penalty):
     model.train()
     running_loss = 0.0
@@ -30,10 +31,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device, lambda_penalty)
         optimizer.zero_grad()
         outputs = model(inputs)
         
-        # Calculate cross-entropy loss
         ce_loss = criterion(outputs, labels)
         
-        # Calculate sparsity loss as per the PDF 
         sparsity_loss = 0
         num_gates = 0
         for module in model.modules():
@@ -41,11 +40,9 @@ def train_epoch(model, dataloader, optimizer, criterion, device, lambda_penalty)
                 sparsity_loss += module.get_mask().sum()
                 num_gates += 1
         
-        # Average the sparsity loss over all gates to make lambda more stable
         if num_gates > 0:
             sparsity_loss /= num_gates
 
-        # Combine losses
         total_loss = ce_loss + lambda_penalty * sparsity_loss
         
         total_loss.backward()
@@ -93,10 +90,12 @@ def evaluate(model, dataloader, criterion, device, description="Evaluating"):
 
     return epoch_loss, epoch_acc, ece, all_preds, all_labels
 
+
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
+    # Updated save path to include model name for better organization
     save_path = os.path.join(config['results_dir'], config['dataset'], config['model'], f"seed_{args.seed}")
     os.makedirs(save_path, exist_ok=True)
     setup_logging(os.path.join(save_path, 'train.log'))
@@ -113,23 +112,32 @@ def main(args):
         path=config['data_path']
     )
     
-    # Define input_shape based on dataset for FLOPs calculation
     if 'MNIST' in config['dataset'] or 'FashionMNIST' in config['dataset']:
         input_shape = (config['in_channels'], 28, 28)
     elif 'CIFAR' in config['dataset'] or 'GTSRB' in config['dataset']:
         input_shape = (config['in_channels'], 32, 32)
     else:
-        # Fallback for any other dataset
         input_shape = (config.get('in_channels', 3), 32, 32)
         logging.warning(f"Could not derive input shape for {config['dataset']}. Defaulting to {input_shape}.")
 
-    model = PoseSelectiveSparse_ResNet44(
-        n=config.get('resnet_n', 7),
-        num_classes=config['num_classes'],
-        in_channels=config['in_channels'],
-        group=config['group'],
-        widths=config['widths']
-    ).to(device)
+    # --- REPLACE THE MODEL CREATION BLOCK WITH THIS ---
+    logging.info(f"Creating model: {config['model']}")
+    if config['model'] == 'PoseSelective_P4CNN_MNIST':
+        model = PoseSelective_P4CNN_MNIST(
+            num_classes=config['num_classes'],
+            in_channels=config['in_channels']
+        ).to(device)
+    elif config['model'] == 'PoseSelectiveSparse_ResNet44':
+        model = PoseSelectiveSparse_ResNet44(
+            n=config.get('resnet_n', 7),
+            num_classes=config['num_classes'],
+            in_channels=config['in_channels'],
+            group=config['group'],
+            widths=config['widths']
+        ).to(device)
+    else:
+        raise ValueError(f"Model '{config['model']}' not recognized.")
+    # --- END OF REPLACEMENT ---
     
     num_params = count_parameters(model)
     logging.info(f"Model initialized with {num_params:,} trainable parameters.")
@@ -173,11 +181,14 @@ def main(args):
         gate_weights = get_gate_weights(model)
         logging.info(f"  -> Gate Weights: {gate_weights}")
 
-    # --- FINAL TESTING ---
     logging.info("Training finished. Evaluating best model on the test set.")
     model.load_state_dict(torch.load(best_model_path))
     
-    # --- FLOPs Calculation ---
+    logging.info("Setting final gate temperature to a near-zero value for hard-gate evaluation.")
+    for module in model.modules():
+        if isinstance(module, DifferentiableMaskGate):
+            module.temp.fill_(1e-5)
+
     logging.info("Calculating final model GFLOPs...")
     gflops = calculate_gflops(model, input_shape, device)
     if gflops != -1:
@@ -201,4 +212,3 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, required=True, help="Random seed for the experiment.")
     args = parser.parse_args()
     main(args)
-
