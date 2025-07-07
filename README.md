@@ -45,3 +45,21 @@ python baselines/calculate_baseline_flops.py --config configs/cifar10.yaml
 ## License
 
 This project is licensed under the Apache 2.0 License; see the [LICENSE](LICENSE) file for details.
+
+## Contact / Support
+
+For any questions, issues, or collaboration inquiries related to this project, please feel free to contact the authors:
+
+- **Dr. S. Pradeep** – Post-Doctoral
+  Researcher and Principal Investigator at the Machine Intelligence Lab, Department of Computer
+  Science and Engineering, IIT Roorkee
+
+  Email: pradeep.cs@sric.iitr.ac.in
+
+- **Kanishk Sharma** – M.Tech, Department of Computer Science and Engineering, IIT Roorkee  
+  Email: kanishk_s@cs.iitr.ac.in
+
+- **Dr. R. Balasubramanian** – Professor (HAG) and Head of the Department of Computer Science & Engineering, IIT Roorkee  
+  Email: bala@cs.iitr.ac.in
+
+We welcome feedback, bug reports, and contributions!
