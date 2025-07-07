@@ -5,7 +5,7 @@ use_flips: false
 
 # Model Parameters
 model: "PoseSelectiveSparse_ResNet44"
-group: "P4" 
+group: "P4M" 
 in_channels: 1
 num_classes: 10
 resnet_n: 7 
