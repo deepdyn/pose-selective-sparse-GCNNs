@@ -53,7 +53,6 @@ For any questions, issues, or collaboration inquiries related to this project, p
 - **Dr. S. Pradeep** – Post-Doctoral
   Researcher and Principal Investigator at the Machine Intelligence Lab, Department of Computer
   Science and Engineering, IIT Roorkee
-
   Email: pradeep.cs@sric.iitr.ac.in
 
 - **Kanishk Sharma** – M.Tech, Department of Computer Science and Engineering, IIT Roorkee  
