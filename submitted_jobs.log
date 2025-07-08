@@ -8,7 +8,6 @@ gcnn_rot_fashion_mnist_seed_1
 gcnn_rot_fashion_mnist_seed_2
 gcnn_rot_fashion_mnist_seed_3
 gcnn_rot_fashion_mnist_seed_4
-gcnn_cifar10_seed_0
 gcnn_cifar10_seed_1
 gcnn_cifar10_seed_2
 gcnn_cifar10_seed_3
@@ -39,3 +38,4 @@ gcnn_rot_mnist_seed_2
 gcnn_rot_mnist_seed_3
 gcnn_rot_mnist_seed_4
 gcnn_rot_mnist_seed_0
+gcnn_cifar10_seed_0
