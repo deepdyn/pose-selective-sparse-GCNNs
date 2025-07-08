@@ -88,44 +88,62 @@ def compute_ece(model, test_loader, device="cuda", n_bins=15):
 
 def calculate_gflops(model, input_shape, device):
     """
-    Calculates the GFLOPs of a sparse model by temporarily hardening the gates
-    to reflect the pruned state at test time.
+    Calculates the GFLOPs of a sparse model using a custom handler for thop
+    to correctly account for pruned orientations.
     """
     try:
         from thop import profile
-        from src.models.pose_gcnn import DifferentiableMaskGate
+        from src.models.pose_gcnn import SparseR2Conv
+        from e2cnn import nn as enn
     except ImportError:
-        logging.warning("`thop` is not installed. Skipping FLOPs calculation. Please run `pip install thop`.")
+        logging.warning("Required libraries for FLOPs calculation (`thop`, `e2cnn`) are not installed.")
         return -1
 
     dummy_input = torch.randn(1, *input_shape).to(device)
     
-    original_get_mask_methods = {}
-
-    # Define the hard mask function that mimics the zero-temperature limit
-    def hard_get_mask(self):
+    # This is the custom rule for our sparse convolution layer
+    def sparse_r2conv_handler(m: SparseR2Conv, x: torch.Tensor, y: torch.Tensor):
+        # Get the hard 0/1 mask from the gate
         with torch.no_grad():
-            soft_mask = torch.sigmoid(self.b_logits / self.temp)
-            # Convert to a hard 0/1 mask
-            return (soft_mask > 0.5).float()
+            hard_mask = (m.gate.get_mask() > 0.5).float()
+        
+        # Calculate the proportion of active (non-pruned) orientations
+        active_ratio = torch.mean(hard_mask)
+        
+        # Get the underlying dense convolution layer
+        dense_conv = m.conv
+        
+        # Manually calculate the FLOPs for the dense convolution
+        # This is a standard formula for convolutions
+        output_dims = y.shape[2:]
+        kernel_dims = dense_conv.kernel_size
+        in_channels = dense_conv.in_type.size
+        out_channels = dense_conv.out_type.size
+        
+        # Operations per output element: (2 * in_channels * kernel_w * kernel_h)
+        # We account for the group dimension by multiplying with the size of the fiber group
+        group_size = m.gate.gsize
+        
+        conv_per_position_flops = (2 * in_channels * group_size * kernel_dims[0] * kernel_dims[1])
+        
+        active_flops = (conv_per_position_flops * output_dims[0] * output_dims[1] * out_channels)
+        
+        # Scale the FLOPs by the ratio of active gates
+        m.total_ops += torch.DoubleTensor([int(active_flops * active_ratio)])
 
-    # Temporarily replace the get_mask method in all gate modules
-    for name, module in model.named_modules():
-        if isinstance(module, DifferentiableMaskGate):
-            original_get_mask_methods[name] = module.get_mask
-            module.get_mask = partial(hard_get_mask, module)
+
+    # The custom_ops dictionary tells thop to use our new rule
+    custom_ops = {
+        SparseR2Conv: sparse_r2conv_handler,
+    }
 
     try:
         model.eval()
-        total_ops, _ = profile(model, inputs=(dummy_input,), verbose=False)
+        # Profile the model using our custom handler
+        total_ops, _ = profile(model, inputs=(dummy_input,), custom_ops=custom_ops, verbose=False)
         gflops = total_ops / 1e9
     except Exception as e:
         logging.error(f"An error occurred during FLOPs calculation: {e}")
         gflops = -1
-    finally:
-        # IMPORTANT: Restore the original methods to not affect subsequent evaluations
-        for name, module in model.named_modules():
-            if name in original_get_mask_methods:
-                module.get_mask = original_get_mask_methods[name]
     
     return gflops
